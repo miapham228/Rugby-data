@@ -1,0 +1,568 @@
+---
+title: "STATS780 Project"
+author: "    "
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+### Importing data
+```{r setup, warning=FALSE}
+# Load all packages
+library(readxl)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+# Create vector specifying column data types
+# Assume 34 columns, with the 6th as a date
+col_types <- rep("guess", 34)  # Set all columns to auto-detect
+col_types[6] <- "date"  # Set the 6th column as date type
+
+# Read Excel file with specified column types
+data <- read_excel("WFRU everything.xlsx", col_types = col_types, n_max = 163)
+colnames(data) <- gsub(" ", "_", colnames(data))
+
+# check it
+colnames(data)
+
+# Preview the first few rows of data
+head(data)
+```
+
+### Cleaning & Extracting useful data
+
+```{r}
+
+# Create new dataframe for 'baseline' status
+baseline_data <- filter(data, status == "baseline")
+
+# Remove 'baseline' rows from original dataframe
+data <- filter(data, status != "baseline")
+
+# Preview the 'baseline' dataframe
+head(baseline_data)
+
+# Preview the dataframe after removing 'baseline'
+head(data)
+
+# Create new dataframe for 'non-player' status
+non_player_data <- filter(data, status == "non-player")
+
+# Remove 'non-player' rows from original dataframe
+data <- filter(data, status != "non-player")
+
+# Preview the 'non-player' dataframe
+head(non_player_data)
+
+# Preview the dataframe after removing 'non-player'
+head(data)
+
+# Remove rows with NA values
+data_clean <- na.omit(data)
+
+# Preview cleaned dataframe
+head(data_clean)
+
+# Compare row counts before and after NA removal
+dim(data)        # Row count before removal
+dim(data_clean)  # Row count after removal
+```
+
+### Histogram of each variable
+
+```{r}
+# important performance variables 
+match_performance_vars <- c("min_played", "HSR", "HSR/min", "A+D+C", "A+D+C/min", "distance", "collisions", "sprint", "acc+dec_3.5+") 
+
+# a loop for all plots
+par(mfrow=c(3,3))
+for (var in match_performance_vars){
+  hist(data_clean[[var]], main = paste("Distribution of", var), xlab = var)
+}
+
+# important recovery variables
+post_match_vars <- c("PPO", "Energy", "SLJ_Best", "IRM", "*BW") 
+# a loop for all plots
+par(mfrow= c(2,3))
+for (var in post_match_vars){
+  hist(data_clean[[var]], main = paste("Distribution of", var), xlab = var)
+}
+```
+
+### Scatterplot for each recovery variables vs preformance variables
+```{r}
+# scatter plot for SLJ
+# convert to long data
+dt_long <- data_clean %>%
+  dplyr::select(ID, Unit, SLJ_Best, min_played, HSR, `HSR/min`, `A+D+C`, `A+D+C/min`, distance, collisions, sprint, `acc+dec_3.5+`) %>%
+  pivot_longer(cols = -c(ID, Unit, SLJ_Best),  # All columns except these will be gathered
+               names_to = "Performance",       # New column for variable names
+               values_to = "Values")
+
+# plot for SLJ
+ggplot(dt_long, aes(x = Values, y = SLJ_Best, colour = Unit)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)+ 
+  xlab("Performance Measures") +
+  ylab("SLJ_Best") +
+  facet_wrap(. ~ Performance, scales="free")
+
+# plot for PPO
+data_clean %>% dplyr::select(ID,Unit, PPO, min_played, HSR, `HSR/min`, `A+D+C`, `A+D+C/min`, distance, collisions, sprint, `acc+dec_3.5+`) %>% gather(Performance, Values, -c(ID,Unit, PPO)) %>% 
+  ggplot(aes(x = Values, y = PPO, colour = Unit)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)+ 
+  xlab("Performance Measures") +
+  ylab("PPO") +
+  facet_wrap(. ~ Performance, scales="free")
+```
+
+
+```{r}
+# plot for Energy
+data_clean %>% dplyr::select(ID,Unit, Energy, min_played, HSR, `HSR/min`, `A+D+C`, `A+D+C/min`, distance, collisions, sprint, `acc+dec_3.5+`) %>% gather(Performance, Values, -c(ID,Unit, Energy)) %>% 
+  ggplot(aes(x = Values, y = Energy, colour = Unit)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)+ 
+  xlab("Performance Measures") +
+  ylab("Energy") +
+  facet_wrap(. ~ Performance, scales="free")
+
+# plot for IRM
+data_clean %>% dplyr::select(ID,Unit, IRM, min_played, HSR, `HSR/min`, `A+D+C`, `A+D+C/min`, distance, collisions, sprint, `acc+dec_3.5+`) %>% gather(Performance, Values, -c(ID,Unit, IRM)) %>% 
+  ggplot(aes(x = Values, y = IRM, colour = Unit)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)+ 
+  xlab("Performance Measures") +
+  ylab("IRM") +
+  facet_wrap(. ~ Performance, scales="free")
+
+# plot for x.BW
+data_clean %>% dplyr::select(ID,Unit, `*BW`, min_played, HSR, `HSR/min`, `A+D+C`, `A+D+C/min`, distance, collisions, sprint, `acc+dec_3.5+`) %>% gather(Performance, Values, -c(ID,Unit, `*BW`)) %>% 
+  ggplot(aes(x = Values, y = `*BW`, colour = Unit)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)+ 
+  xlab("Performance Measures") +
+  ylab("BW") +
+  facet_wrap(. ~ Performance, scales="free")
+```
+
+### Descriptive stats analysis
+
+```{r}
+# First, divide into post-match fitness variables and match-related variables
+post_match_vars <- c("Unit","PPO", "Energy", "SLJ_Best", "IRM", "*BW", "Unit")
+match_performance_vars <- c("Unit", "min_played", "HSR", "HSR/min", "A+D+C", "A+D+C/min", "distance", "collisions", "sprint", "acc+dec_3.5+")
+
+# Calculate mean, SD, min, max of post-match fitness variables
+post_match_means <- data_clean %>%
+  dplyr::select(all_of(post_match_vars)) %>% group_by(Unit) %>% 
+  summarise_all(~mean(., na.rm = TRUE))
+
+post_match_sds <- data_clean %>%
+  dplyr::select(all_of(post_match_vars)) %>% group_by(Unit) %>%
+  summarise_all(~sd(., na.rm = TRUE))
+
+post_match_med <- data_clean %>%
+  dplyr::select(all_of(post_match_vars)) %>% group_by(Unit) %>%
+  summarise_all(~median(., na.rm = TRUE))
+
+post_match_min <- data_clean %>%
+  dplyr::select(all_of(post_match_vars)) %>% group_by(Unit) %>%
+  summarise_all(~min(., na.rm = TRUE))
+
+post_match_max <- data_clean %>%
+  dplyr::select(all_of(post_match_vars)) %>% group_by(Unit) %>%
+  summarise_all(~max(., na.rm = TRUE))
+```
+
+```{r}
+# Calculate mean, SD, min, max of match-related variables
+match_performance_means <- data_clean %>%
+  dplyr::select(all_of(match_performance_vars)) %>% group_by(Unit) %>%
+  summarise_all(~mean(., na.rm = TRUE))
+
+match_performance_sds <- data_clean %>%
+  dplyr::select(all_of(match_performance_vars)) %>% group_by(Unit) %>%
+  summarise_all(~sd(., na.rm = TRUE))
+
+match_performance_med <- data_clean %>%
+  dplyr::select(all_of(match_performance_vars)) %>% group_by(Unit) %>%
+  summarise_all(~median(., na.rm = TRUE))
+
+match_performance_min <- data_clean %>%
+  dplyr::select(all_of(match_performance_vars)) %>% group_by(Unit) %>%
+  summarise_all(~min(., na.rm = TRUE))
+
+match_performance_max <- data_clean %>%
+  dplyr::select(all_of(match_performance_vars)) %>% group_by(Unit) %>%
+  summarise_all(~max(., na.rm = TRUE))
+```
+
+### Correlation analysis
+
+```{r}
+# Compute the correlation matrix between multiple performance variables
+cor_matrix_irm <- data_clean %>%
+  select(min_played, distance, HSR, sprint, `HSR/min`, `acc+dec_3.5+`,collisions, `A+D+C`, `A+D+C/min`) %>%
+  cor(use = "complete.obs") %>% round(2)
+
+# generate a heatmap
+library(ggcorrplot)
+ggcorrplot::ggcorrplot(cor_matrix_irm)
+
+```
+
+
+
+
+### Mixed models 
+
+```{r, warning=FALSE, message=FALSE}
+library(lme4)
+library(lmerTest)  # For p-value calculation
+
+# Function: Automatically fit all sub-models for multiple response variables and return the model with the lowest AIC and significant p-values
+fit_all_models <- function(data, response_vars, fixed_effects, random_effect, p_value_threshold = 0.05) {
+  # Create an empty list to store the best model for each response variable
+  best_models <- list()
+  # Iterate over each response variable
+  for (response_var in response_vars) {
+  # Generate all possible combinations of fixed effects
+    fixed_effect_combinations <- unlist(lapply(1:length(fixed_effects), function(k) {
+      combn(fixed_effects, k, simplify = FALSE)
+    }), recursive = FALSE)
+    best_model <- NULL
+    best_aic <- Inf
+    # Iterate over all combinations, fit the model, and compare AIC and significance
+    for (fixed_effect_combo in fixed_effect_combinations) {
+      # Create the formula
+      fixed_effect_formula <- paste(fixed_effect_combo, collapse = " + ")
+      model_formula <- as.formula(paste(response_var, "~", fixed_effect_formula, "+ (1 |", random_effect, ")"))
+      # Fit the model
+      model <- tryCatch({
+        lmer(model_formula, data = data, REML = FALSE)
+      }, error = function(e) {
+        return(NULL)
+      })
+      # If the model fits successfully, compute AIC and check significance
+      if (!is.null(model)) {
+        model_aic <- AIC(model)
+        # Check significance of fixed effects (p-values)
+        model_summary <- summary(model)
+        p_values <- coef(summary(model))[, "Pr(>|t|)"]
+        # Check if all fixed effects are significant (p-values < threshold)
+        all_significant <- all(p_values < p_value_threshold, na.rm = TRUE)
+        # If AIC is lower and all variables are significant, update the best model
+        if (model_aic < best_aic && all_significant) {
+          best_aic <- model_aic
+          best_model <- model
+        }
+      }
+    }
+    # Store the best model for the current response variable
+    best_models[[response_var]] <- list(best_model = best_model, best_aic = best_aic)
+  }
+  return(best_models)
+}
+```
+
+```{r}
+# Example usage: Fit models for multiple response variables
+data_clean$Unit <- as.factor(data_clean$Unit)
+response_vars <- c("PPO", "Energy", "SLJ_Best", "IRM", "`*BW`")
+fixed_effects <- c("Unit", "min_played", "HSR", "`HSR/min`", "`A+D+C`", "`A+D+C/min`", "distance", "collisions", "sprint", "`acc+dec_3.5+`")
+
+# Call the function to fit models for all response variables
+all_best_models <- fit_all_models(data_clean, response_vars, fixed_effects, "ID", p_value_threshold = 0.05)
+
+# Output the best model and AIC for each response variable
+for (response_var in response_vars) {
+  cat("\nBest model for:", response_var, "\n")
+  print(summary(all_best_models[[response_var]]$best_model))
+  cat("AIC:", all_best_models[[response_var]]$best_aic, "\n")
+}
+```
+
+
+### Assumptions checking
+```{r}
+# Energy model
+energy_mod <- lmer(Energy ~ Unit +(1|ID), data = data_clean,REML = FALSE)
+summary(energy_mod)
+# combine in 1 panel 
+par(mfrow = c(1,3))
+plot(fitted(energy_mod), resid(energy_mod), xlab ="fitted value", ylab = "residuals",main = "Residuals vs Fitted")
+hist(resid(energy_mod),main ="Histogram of residuals", xlab= "residuals")
+qqnorm(resid(energy_mod),main = "Normal Q-Q Plot")
+qqline(resid(energy_mod))
+
+# X.BW model
+XBW_mod <- lmer(`*BW` ~ distance +(1|ID), data = data_clean,REML = FALSE)
+summary(XBW_mod)
+par(mfrow = c(1,3))
+plot(fitted(XBW_mod), resid(XBW_mod), xlab ="fitted value", ylab = "residuals",main = "Residuals vs Fitted")
+hist(resid(XBW_mod),main ="Histogram of residuals", xlab= "residuals")
+qqnorm(resid(XBW_mod),main = "Normal Q-Q Plot")
+qqline(resid(XBW_mod))
+
+# SLJ model
+SLJ_mod <- lmer(SLJ_Best ~ HSR + `HSR/min` + sprint + collisions +(1|ID), data = data_clean,REML = FALSE)
+summary(SLJ_mod)
+par(mfrow = c(1,3))
+plot(fitted(SLJ_mod), resid(SLJ_mod), xlab ="fitted value", ylab = "residuals",main = "Residuals vs Fitted")
+hist(resid(SLJ_mod),main ="Histogram of residuals", xlab= "residuals")
+qqnorm(resid(SLJ_mod),main = "Normal Q-Q Plot")
+qqline(resid(SLJ_mod))
+
+# IRM model
+IRM_mod <- lmer(IRM ~ Unit + `A+D+C/min` + distance + `acc+dec_3.5+` +(1|ID), data = data_clean,REML = FALSE)
+summary(IRM_mod)
+par(mfrow = c(1,3))
+plot(fitted(IRM_mod), resid(IRM_mod), xlab ="fitted value", ylab = "residuals",main = "Residuals vs Fitted")
+hist(resid(IRM_mod), main ="Histogram of residuals", xlab= "residuals")
+qqnorm(resid(IRM_mod),main = "Normal Q-Q Plot")
+qqline(resid(IRM_mod))
+```
+
+
+
+### Prediction tool
+
+```{r, eval = FALSE}
+# Define coefficients for five best models
+best_model_coeffs <- list(
+  Energy = c(
+    Intercept = 7.1939, 
+    Unitforwards = 0.7022
+  ),
+  
+  SLJ_Best = c(
+    Intercept = 237.10588, 
+    HSR = -0.03300, 
+    `HSR/min` = 1.28834, 
+    collisions = 0.43416, 
+    sprint = 0.11973
+  ),
+  
+  IRM = c(
+    Intercept = 162.035575, 
+    Unitforwards = 39.372211, 
+    `A+D+C/min` = -28.910251, 
+    distance = -0.005805, 
+    `acc+dec_3.5+` = 1.130692
+  ),
+  
+  "`*BW`" = c(
+    Intercept = 1.660e+00, 
+    distance = -3.886e-05
+  )
+)
+
+# Prediction function based on 9 variables of a player
+predict_player <- function(player_data) {
+  
+  # Extract player variables
+  HSR <- player_data$HSR
+  collisions <- player_data$collisions
+  sprint <- player_data$sprint
+  HSR_min <- player_data$HSR_min
+  A_D_C_min <- player_data$A_D_C_min
+  distance <- player_data$distance
+  Unit <- player_data$Unit  # "forwards" or "backs"
+  
+  # Convert Unit to binary: 1 for forwards, 0 for backs
+  Unitforwards <- ifelse(Unit == "forwards", 1, 0)
+  
+  # Predict using model coefficients
+  predictions <- list(
+    Energy = best_model_coeffs$Energy["Intercept"] + 
+             best_model_coeffs$Energy["Unitforwards"] * Unitforwards,
+    
+    SLJ_Best = best_model_coeffs$SLJ_Best["Intercept"] + 
+               best_model_coeffs$SLJ_Best["HSR"] * HSR + 
+               best_model_coeffs$SLJ_Best["HSR/min"] * HSR_min + 
+               best_model_coeffs$SLJ_Best["collisions"] * collisions +
+               best_model_coeffs$SLJ_Best["sprint"] * sprint,
+    
+    IRM = best_model_coeffs$IRM["Intercept"] + 
+          best_model_coeffs$IRM["Unitforwards"] * Unitforwards +
+          best_model_coeffs$IRM["A+D+C/min"] * A_D_C_min + 
+          best_model_coeffs$IRM["distance"] * distance + 
+          best_model_coeffs$IRM["acc+dec_3.5+"] * player_data$acc_dec_3_5,
+    
+    BW = best_model_coeffs$"`*BW`"["Intercept"] + 
+         best_model_coeffs$"`*BW`"["distance"] * distance
+  )
+  
+  return(predictions)
+}
+
+# Example player variable values (user input)
+player_data <- list(
+  HSR = 100,           # HSR value
+  collisions = 20,     # Collision count
+  sprint = 30,         # Sprint count
+  HSR_min = 1.1,       # HSR per minute
+  A_D_C_min = 0.5,     # A+D+C per minute
+  distance = 5000,     # Distance covered
+  acc_dec_3_5 = 10,    # Acceleration/Deceleration > 3.5 m/s²
+  Unit = "forwards"    # Player's unit (forwards/backs)
+)
+
+# Call function to predict results
+predict_player(player_data)
+```
+
+### Prediction interval for X.BW
+```{r, warning = FALSE, message=FALSE, eval = FALSE}
+library(merTools)
+pred_intervals <- predictInterval(XBW_mod, newdata = data_clean, 
+                                  level = 0.95, n.sims = 1000, seed = 12345,
+                                  include.resid.var = TRUE,fix.intercept.variance = TRUE)
+
+dt <- cbind(ID = data_clean$ID,X.BW = data_clean$`*BW`, distance = data_clean$distance,pred_intervals)
+
+# visualization
+ggplot(dt, aes(x = distance, y = X.BW)) +
+  geom_point() +  # Observed data points
+  geom_line(aes(y = fit),color = 'red') +   # Line for predicted values
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +  # Shaded area for prediction interval
+  labs(title = "Prediction of X.BW with 95% Prediction Intervals",
+       x = "Distance covered",
+       y = "Predicted X.BW") +
+  theme_minimal() 
+
+# visualize for each player
+# it would be clearer if we have more data
+dt %>%  
+  ggplot(aes(distance, X.BW)) +
+  geom_point(show.legend = FALSE) +
+  geom_line(aes(y = fit),color = 'red') +
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
+  facet_wrap(~ID) +
+  labs(title = "Prediction of X.BW with 95% Prediction Intervals",
+       x = "Distance covered",
+       y = "Predicted X.BW") +
+  theme_minimal() 
+
+# for each player 14
+p14 <- dt %>% filter (ID == 14) %>% 
+  ggplot(aes(distance, X.BW,col = ID)) +
+  geom_point(show.legend = FALSE) +
+  geom_line(aes(y = fit),color = 'red') +
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
+  labs(
+       x = "Distance covered",
+       y = "Predicted X.BW") +
+  theme_minimal() 
+# for player 13
+p13 <- dt %>% filter (ID == 13) %>% 
+  ggplot(aes(distance, X.BW,col = ID)) +
+  geom_point(show.legend = FALSE) +
+  geom_line(aes(y = fit),color = 'red') +
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
+  labs(
+       x = "Distance covered",
+       y = "Predicted X.BW") +
+  theme_minimal() 
+gridExtra::grid.arrange(p13,p14, ncol = 2, top = "Prediction of IRM with 95% Prediction Intervals")
+```
+
+
+
+### Prediction interval for SLJ
+```{r, warning = FALSE, eval = FALSE}
+
+# Generate prediction intervals using predictInterval
+pred_intervals <- predictInterval(SLJ_mod, newdata = data_clean, 
+                                  level = 0.95, n.sims = 1000,seed = 12345,
+                                  include.resid.var = TRUE,fix.intercept.variance = TRUE) 
+                                  
+dt <- cbind(ID= data_clean$ID, SLJ = data_clean$SLJ_Best, HSR = data_clean$HSR, HSR_min = data_clean$`HSR/min`, sprint = data_clean$sprint,collisions = data_clean$collisions, pred_intervals)
+
+# visualization
+xvars=c("HSR", "HSR_min","sprint","collisions")
+xlab = c("HSR", "HSR/min", "sprint", "collisions")
+plots <- list()
+for (i in 1:4 ){
+ p <- ggplot(dt,  aes(x = dt[[xvars[i]]], y = SLJ)) +
+  geom_point() +  # Observed data points
+  geom_line(aes(y = fit),colour= "red") +   # Line for predicted values
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +  # Shaded area for prediction interval
+  labs(
+       x = xlab[i],
+       y = "Predicted SLJ") +
+  theme_minimal() 
+ plots[[i]] <- p  # Store the plot in the list
+}
+# Combine the plots into a single panel
+gridExtra::grid.arrange(grobs = plots, nrow = 2, top = "Prediction of IRM with 95% Prediction Intervals")   
+
+# for player with Id =17
+p17 <- dt %>%  filter (ID == 17) %>% 
+  ggplot(aes(sprint, SLJ)) +
+  geom_point(show.legend = FALSE) +
+  geom_line(aes(y = fit),color = 'red') +
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
+  labs(
+       x = "Sprint",
+       y = "Predicted SLJ") +
+  theme_minimal()
+
+# for player 32
+p32 <- dt %>%  filter (ID == 32) %>% 
+  ggplot(aes(sprint, SLJ)) +
+  geom_point(show.legend = FALSE) +
+  geom_line(aes(y = fit),color = 'red') +
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
+  #facet_wrap(~ID) +
+  labs(
+       x = "Sprint",
+       y = "Predicted SLJ") +
+  theme_minimal()
+
+# combine them
+gridExtra::grid.arrange(p17,p32, ncol = 2, top = "Prediction of IRM with 95% Prediction Intervals")
+```
+
+
+
+### Prediction interval for IRM
+```{r, warning = FALSE, eval=FALSE}
+
+# Generate prediction intervals using predictInterval
+pred_intervals <- predictInterval(IRM_mod, newdata = data_clean, 
+                                  level = 0.95, n.sims = 1000, seed = 12345,
+                                  include.resid.var = TRUE,fix.intercept.variance = TRUE)
+                                  
+dt <- cbind(IRM = data_clean$IRM,distance = data_clean$distance, acc = data_clean$`acc+dec_3.5+`, ADC = data_clean$`A+D+C/min`,pred_intervals)
+
+# visualization
+xvars=c("distance", "acc","ADC")
+xlab = c("Distance covered", "acc.dec3.5", "A+D+C/min")
+plots <- list()
+for (i in 1:3 ){
+ p <- ggplot(dt,  aes(x = dt[[xvars[i]]], y = IRM)) +
+  geom_point() +  # Observed data points
+  geom_line(aes(y = fit),color = "red") +   # Line for predicted values
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +  # Shaded area for prediction interval
+  labs(
+       x = xlab[i],
+       y = "Predicted IRM") +
+  theme_minimal() 
+ plots[[i]] <- p  # Store the plot in the list
+}
+
+# Combine the plots into a single panel
+gridExtra::grid.arrange(grobs = plots, ncol = 3, top = "Prediction of IRM with 95% Prediction Intervals")
+```
+
+
+
+
+
+
+
+
